@@ -22,7 +22,10 @@ Then run the script using a Python interpreter.
 Example:
 $ python process_mpi2wrf.py
 
-Author: Husile Bai u1215181
+Author: Husile Bai (husile.bai@utah.edu)
+
+Acknowledgement: The author extends gratitude to Prof. Alfonso Fernandez (alfernandez@udec.cl)
+                 for recommending the 'pywinter' package and providing codes for data processing.
 """
 
 import numpy as np
