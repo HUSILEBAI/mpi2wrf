@@ -3,7 +3,26 @@
 """
 Created on Wed Jun 26 20:37:20 2024
 
-@author: u1215181
+This script processes climate data from the MPI-ESM1-2-HR model,
+interpolates it to a common grid, and saves the results for further analysis.
+
+It reads multiple variables, performs boundary checks, and ensures data integrity
+by handling missing values appropriately.
+
+Dependencies:
+- numpy
+- pywinter
+- netCDF4
+- scipy
+
+Usage:
+Ensure the INPUT_DIR and OUTPUT_DIR paths are correctly set for your environment.
+Then run the script using a Python interpreter.
+
+Example:
+$ python process_mpi2wrf.py
+
+Author: Husile Bai u1215181
 """
 
 import numpy as np
@@ -12,16 +31,15 @@ import netCDF4 as ncf
 import datetime as DT
 import os
 import glob
-from scipy.interpolate import griddata
 
 # Constants
-START_DATE = DT.datetime(1980, 1, 1, 6, 0, 0)
-END_DATE = DT.datetime(1985, 1, 1, 0, 0, 0)
-BASE_DATE = DT.datetime(1850, 1, 1)
-MISSING_VALUE = 1.e+19  # This is lower than the missing value, so use ">" given an issue with soil data that does not work with the exact value
-FIELDS_3D = [3, 6, 8, 11, 13, 15, 17, 19, 20, 22, 24, 26, 27]
-INPUT_DIR = '/uufs/chpc.utah.edu/common/home/strong-group7/husile/gsl/cmip_data/MPI-ESM1-2-HR/historical/'
-OUTPUT_DIR = '/uufs/chpc.utah.edu/common/home/strong-group7/husile/gsl/cmip_data/MPI-ESM1-2-HR/output_mpi2int/hist/'
+START_DATE = DT.datetime(1980, 1, 1, 6, 0, 0)  # Start date of the data
+END_DATE = DT.datetime(1985, 1, 1, 0, 0, 0)    # End date of the data
+BASE_DATE = DT.datetime(1850, 1, 1)            # Base date for time conversion
+MISSING_VALUE = 1.e+19                         # Threshold for missing values
+FIELDS_3D = [3, 6, 8, 11, 13, 15, 17, 19, 20, 22, 24, 26, 27]  # Fields for 3D data
+INPUT_DIR = '/uufs/chpc.utah.edu/common/home/strong-group7/husile/gsl/cmip_data/MPI-ESM1-2-HR/historical/'  # Directory for input files
+OUTPUT_DIR = '/uufs/chpc.utah.edu/common/home/strong-group7/husile/gsl/cmip_data/MPI-ESM1-2-HR/output_mpi2int/hist/'  # Directory for output files
 
 # Variable file patterns
 variable_files = {
@@ -43,9 +61,11 @@ variable_files = {
 
 # Utility Functions
 def format_time(date_time):
+    """Format datetime object to a string."""
     return date_time.strftime('%Y%m%d%H%M')
 
 def read_and_process_variable(file_name, var_name, start_timesteps, end_timesteps):
+    """Read and process a 2D variable from a NetCDF file."""
     ds = ncf.Dataset(file_name, 'r')
     var_data = ds.variables[var_name][start_timesteps:end_timesteps, :, :]
     ds.close()
@@ -54,6 +74,7 @@ def read_and_process_variable(file_name, var_name, start_timesteps, end_timestep
     return var_data
 
 def read_and_process_3d_variable(file_name, var_name, start_timesteps, end_timesteps):
+    """Read and process a 3D variable from a NetCDF file."""
     ds = ncf.Dataset(file_name, 'r')
     var_data = ds.variables[var_name][start_timesteps:end_timesteps, :, :, :]
     plevs = ds.variables['plev'][:]
@@ -63,6 +84,7 @@ def read_and_process_3d_variable(file_name, var_name, start_timesteps, end_times
     return var_data, plevs
 
 def map_to_pywinter_name(var_name):
+    """Map variable names to PyWinter naming conventions."""
     var_map = {
         'tas': 'TT',
         'huss': 'SPECHUMD',
@@ -70,7 +92,7 @@ def map_to_pywinter_name(var_name):
         'psl': 'PMSL',
         'vas': 'VV',
         'uas': 'UU',
-        'tos': 'SKINTEMP',
+        'tos': 'SST',
         'hus': 'SPECHUMD',
         'ta': 'TT',
         'va': 'VV',
@@ -83,6 +105,7 @@ def map_to_pywinter_name(var_name):
         raise ValueError(f"Unknown variable name: {var_name}")
 
 def print_variable_shapes(variables):
+    """Print the shapes of variables for debugging."""
     for var_name, var_data_list in variables.items():
         print(f"Shapes for {var_name}:")
         for i, data in enumerate(var_data_list):
@@ -90,6 +113,7 @@ def print_variable_shapes(variables):
 
 # Processing Functions
 def process_chunks(total_steps, chunk_size, operation):
+    """Process data in chunks."""
     for start in range(0, total_steps, chunk_size):
         end = min(start + chunk_size, total_steps)
         print()
@@ -100,6 +124,7 @@ def process_chunks(total_steps, chunk_size, operation):
         operation(start, end)
 
 def process_variables(start_timesteps, end_timesteps, interpolated_tos=None):
+    """Main function to process variables from NetCDF files."""
     variables_2d = {}
     variables_3d = {}
     variables_sl = {}
@@ -161,30 +186,62 @@ def process_variables(start_timesteps, end_timesteps, interpolated_tos=None):
         winter_geo = pyw.Geo0(lat[0], lon[0], dlat, dlon)
 
         for n in range(end_timesteps - start_timesteps):
+            # Boundary check for date_variable
+            if n >= len(date_variable):
+                print(f"Index {n} is out of bounds for date_variable with size {len(date_variable)}")
+                continue
+
             total_fields = []
 
             for var_name, var_data_list in variables_2d.items():
+                # Boundary check for 2D variables
+                if n >= var_data_list[0].shape[0]:
+                    print(f"Index {n} is out of bounds for {var_name} with shape {var_data_list[0].shape}")
+                    continue
+
                 var_data = var_data_list[0][n, :, :]
                 pywinter_var_name = map_to_pywinter_name(var_name)
                 total_fields.append(pyw.V2d(pywinter_var_name.upper(), var_data))
+                
+                if var_name == 'tas':
+                    total_fields.append(pyw.V2d('SKINTEMP', var_data))
+
 
             for var_name, var_data_list in variables_3d.items():
+                # Boundary check for 3D variables
+                if n >= var_data_list[0].shape[0]:
+                    print(f"Index {n} is out of bounds for {var_name} with shape {var_data_list[0].shape}")
+                    continue
+
                 var_data = var_data_list[0][n, :, :, :]
                 plevs = plevs_3d[var_name]
                 pywinter_var_name = map_to_pywinter_name(var_name)
 
                 try:
                     total_fields.append(pyw.V3dp(pywinter_var_name.upper(), var_data, plevs))
+                    # handle case for 'ta' to ensure it's saved as 'TT'
+                    # if var_name =='ta':
+                    #     total_fields.append(pyw.V3d('TT', var_data, plevs))
                 except Exception as e:
                     print(f"Error adding {var_name} to total_fields: {e}")
 
             if 'tsl' in variables_sl and 'mrsos' in variables_sl:
                 sl_layer = ['000010', '010200']
+                # Boundary check for tsl variable
+                if n >= variables_sl['tsl'][0].shape[0]:
+                    print(f"Index {n} is out of bounds for tsl with shape {variables_sl['tsl'][0].shape}")
+                    continue
+
                 tsl_out = np.empty((2, variables_sl['tsl'][0].shape[1], variables_sl['tsl'][0].shape[2]))
                 tsl_out[0, :, :] = variables_sl['tsl'][0][n, :, :]
                 tsl_out[1, :, :] = variables_sl['tsl'][0][n, :, :]
                 winter_soilt_layer = pyw.Vsl('ST', tsl_out, sl_layer)
                 total_fields.append(winter_soilt_layer)
+
+                # Boundary check for mrsos variable
+                if n >= variables_sl['mrsos'][0].shape[0]:
+                    print(f"Index {n} is out of bounds for mrsos with shape {variables_sl['mrsos'][0].shape}")
+                    continue
 
                 mrsos_out = np.empty((2, variables_sl['mrsos'][0].shape[1], variables_sl['mrsos'][0].shape[2]))
                 mrsos_out[0, :, :] = variables_sl['mrsos'][0][n, :, :]
