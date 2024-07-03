@@ -20,7 +20,7 @@ This repository contains scripts for processing climate data from the MPI-ESM1-2
 
 The Bash script processes the Sea Surface Temperature (SST) data from the MPI-ESM1-2-HR historical dataset by selecting specific time steps and interpolating the data to a target grid.
 
-**File**: `process_sst.sh`
+**File**: `process_var_tos.sh`
 
 #### Script Details
 
@@ -111,12 +111,12 @@ Ensure the following dependencies are installed before running the scripts:
 
 1. **Set Execute Permission**:
     ```bash
-    chmod +x process_sst.sh
+    chmod +x process_var_tos.sh
     ```
 
 2. **Run the Script**:
     ```bash
-    ./process_sst.sh
+    ./process_var_tos.sh
     ```
 
 ### Python Script Usage
