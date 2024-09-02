@@ -132,7 +132,7 @@ Ensure the following dependencies are installed before running the scripts:
 ## Author
 
 **Husile Bai**  
-Email: husile.bai@utah.edu
+Email: husile.bai@vanderbilt.edu
 
 ## Acknowledgement
 
